@@ -1,0 +1,435 @@
+
+
+
+
+Audio/Video Transport Core Maintenance Working Group              Claude
+Internet-Draft                                               29 May 2026
+Updates: 7587 (if approved)                                             
+Intended status: Standards Track                                        
+Expires: 30 November 2026
+
+
+Updates to the Opus SDP Media Type for Multi-Channel Streams (multiopus)
+                 draft-claude-read-the-gerrit-cl-latest
+
+Abstract
+
+   The Opus audio codec, as defined in RFC 6716, supports up to 255
+   audio channels carried as a number of mono and stereo (coupled)
+   substreams combined through a channel mapping table.  The SDP media
+   type registered for Opus in RFC 7587, however, only describes the
+   mono and stereo configurations of the "audio/opus" media subtype and
+   fixes the RTP channel count at two.  This document updates RFC 7587
+   to register a companion "audio/multiopus" media subtype and the
+   "num_streams", "coupled_streams", and "channel_mapping" media type
+   parameters that are required to negotiate multi-channel (surround)
+   Opus streams over RTP.  The syntax described here is the one that has
+   been deployed in WebRTC implementations since 2019; its parameters
+   reuse the terminology of the Ogg Opus channel mapping in RFC 7845.
+
+About This Document
+
+   This note is to be removed before publishing as an RFC.
+
+   The latest revision of this draft can be found at
+   https://fippo.github.io/mimi/draft-claude-read-the-gerrit-cl.html.
+   Status information for this document may be found at
+   https://datatracker.ietf.org/doc/draft-claude-read-the-gerrit-cl/.
+
+   Discussion of this document takes place on the WG Working Group
+   mailing list (mailto:avtcore@ietf.org), which is archived at
+   https://datatracker.ietf.org/wg/avtcore/.  Subscribe at
+   https://www.ietf.org/mailman/listinfo/avtcore/.
+
+   Source for this draft and an issue tracker can be found at
+   https://github.com/fippo/mimi.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 30 November 2026.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction
+   2.  Conventions and Definitions
+   3.  The "multiopus" Media Subtype
+   4.  Media Type Parameters
+   5.  Channel Mapping Semantics
+     5.1.  Recommended Channel Ordering
+   6.  Offer/Answer Considerations
+   7.  Security Considerations
+   8.  Congestion Control Considerations
+   9.  IANA Considerations
+     9.1.  Media Type Registration
+     9.2.  SDP Parameters
+   10. References
+     10.1.  Normative References
+     10.2.  Informative References
+   Acknowledgments
+   Author's Address
+
+1.  Introduction
+
+   The Opus audio codec [RFC6716] natively supports multi-channel audio:
+   a multistream Opus packet combines up to 255 elementary Opus streams,
+   each of which is either "uncoupled" (decoded to a single channel) or
+   "coupled" (decoded to a stereo pair).  A channel mapping table then
+   assigns each decoded channel to an input or output channel.  This
+   mechanism is described normatively for the Ogg encapsulation of Opus
+   in Section 5.1.1 of [RFC7845], and the parameters defined in this
+   document deliberately reuse that terminology.
+
+   The payload format and SDP media type for Opus over RTP are defined
+   in [RFC7587].  That document, however, only describes the mono and
+   stereo cases: Section 7 of [RFC7587] registers the "audio/opus" media
+   subtype with the number of channels in the RTP "a=rtpmap" line fixed
+   at "2", and controls mono versus stereo rendering through the
+   "stereo" and "sprop-stereo" format parameters.  There is no
+   standardized way to signal a configuration with more than two
+   channels, nor to convey the stream count and channel mapping table
+   that the Opus multistream API requires before a decoder can interpret
+   such packets.
+
+   To fill this gap, WebRTC implementations introduced, in 2019, an
+   "audio/multiopus" media subtype carried over RTP as a new code path
+   that does not interfere with the standard mono/stereo Opus decoder.
+   It uses the RTP channel count to carry the number of decoded channels
+   and three additional format parameters --- "num_streams",
+   "coupled_streams", and "channel_mapping" --- to carry the multistream
+   configuration.  For example, a 5.1 surround configuration (six
+   channels) is described as:
+
+   multiopus/48000/6 channel_mapping=0,4,1,2,3,5 num_streams=4 \
+   coupled_streams=2
+
+   This document formalizes that deployed usage and registers the
+   corresponding media subtype and parameters with IANA, updating
+   [RFC7587].
+
+2.  Conventions and Definitions
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+   The terms "stream", "coupled stream", "uncoupled stream", and
+   "channel mapping" are used as defined in Section 5.1.1 of [RFC7845].
+
+3.  The "multiopus" Media Subtype
+
+   This document registers a new media subtype, "audio/multiopus", for
+   carrying multi-channel Opus over RTP.  It is used exactly as the
+   "audio/opus" subtype defined in [RFC7587], with the following
+   differences:
+
+   *  The RTP timestamp clock rate is 48000, as for "audio/opus".
+
+   *  The number of channels encoded in the "a=rtpmap" line carries the
+      number of decoded (output) channels and MAY take any value from 1
+      to 255 inclusive, rather than being fixed at 2.  For example:
+
+      m=audio 54312 RTP/AVP 100
+      a=rtpmap:100 multiopus/48000/6
+      a=fmtp:100 channel_mapping=0,4,1,2,3,5; num_streams=4; \
+                 coupled_streams=2
+
+      describes a 5.1 surround configuration (six channels).
+
+   *  The "stereo" and "sprop-stereo" format parameters defined in
+      [RFC7587] MUST NOT be used with "audio/multiopus"; the number of
+      channels and their layout are fully determined by the channel
+      count and the parameters defined in Section 4.
+
+   *  The "num_streams", "coupled_streams", and "channel_mapping" format
+      parameters defined in Section 4 MUST be present.
+
+   All other media type parameters registered for "audio/opus" in
+   Section 7.1 of [RFC7587] --- "maxplaybackrate", "sprop-
+   maxcapturerate", "maxptime", "ptime", "maxaveragebitrate",
+   "useinbandfec", "usedtx", and "cbr" --- apply unchanged to "audio/
+   multiopus" and retain their meaning and defaults from [RFC7587].
+   Where [RFC7587] expresses a per-channel quantity (for example, the
+   recommended bitrate ranges), the quantity scales with the total
+   number of channels.
+
+   Because an implementation that supports only [RFC7587] treats the
+   "audio/opus" subtype as having exactly two channels, an "a=rtpmap"
+   entry with the "multiopus" encoding name will simply not match such
+   an implementation's Opus codec, and the corresponding format will be
+   ignored during negotiation.  This is by design: the multistream code
+   path is separate from the standard Opus decoder.  A separate "audio/
+   opus" format may be offered alongside an "audio/multiopus" format to
+   interoperate with mono/stereo endpoints.
+
+4.  Media Type Parameters
+
+   This section defines the three format parameters required to
+   configure the Opus multistream layout.  They correspond directly to
+   the "Stream Count", "Coupled Stream Count", and "Channel Mapping"
+   fields of the channel mapping table in Section 5.1.1 of [RFC7845],
+   and to the "streams", "coupled_streams", and "mapping" arguments of
+   the Opus multistream API [RFC6716].
+
+   num_streams:  The total number of elementary Opus streams
+      (substreams) carried in each multistream packet.  This is a
+      decimal integer.  It MUST be greater than or equal to the value of
+      "coupled_streams" and the sum of "num_streams" and
+      "coupled_streams" MUST be less than 255.
+
+   coupled_streams:  The number of those streams that are coupled
+      (stereo) streams.  This is a decimal integer greater than or equal
+      to zero.  The coupled streams are ordered before the uncoupled
+      streams.  The remaining ("num_streams" - "coupled_streams")
+      streams are uncoupled (mono) streams.
+
+   channel_mapping:  The channel mapping table, encoded as a comma-
+      separated list of decimal integers, one per channel, in channel
+      order.  The list MUST contain exactly as many entries as there are
+      channels in the "a=rtpmap" line.  Each entry is in the range 0 to
+      254 inclusive, or has the special value 255.  There is no
+      whitespace between entries.  For example,
+      "channel_mapping=0,4,1,2,3,5".
+
+   The interpretation of these parameters is given in Section 5.
+
+   These three parameters are declarative and describe the multistream
+   layout that the sender of the parameters uses and that the
+   corresponding decoder expects.  They are not subject to negotiation
+   in the sense of intersection; an answerer that cannot decode the
+   offered configuration omits or rejects the format rather than
+   modifying these parameters.  This is analogous to the handling of the
+   declarative "ptime" attribute and the directional Opus parameters in
+   [RFC7587].
+
+5.  Channel Mapping Semantics
+
+   The channel mapping defines, for each input/output channel j, the
+   index i = channel_mapping[j] of the decoded channel that supplies it.
+   The semantics are those of Section 5.1.1 of [RFC7845] and the Opus
+   multistream API:
+
+   *  If i is less than 2 * "coupled_streams", then channel j is carried
+      by stream (i / 2): the left channel of that coupled stream if i is
+      even, or the right channel if i is odd.
+
+   *  Otherwise, if i is less than "num_streams" + "coupled_streams",
+      channel j is carried as the single (mono) channel of uncoupled
+      stream (i - "coupled_streams").
+
+   *  The special value 255 indicates that channel j is not transmitted.
+      On the sending side it is omitted from the encoding; on the
+      receiving side the decoder reproduces it as silence.
+
+   The following constraints apply to a valid configuration and a
+   receiver MUST reject (ignore) a format that violates any of them:
+
+   *  "num_streams" and "coupled_streams" are non-negative and
+      "coupled_streams" does not exceed "num_streams".
+
+   *  The number of "channel_mapping" entries equals the channel count
+      in the "a=rtpmap" line.
+
+   *  Every "channel_mapping" entry is either 255 or strictly less than
+      "num_streams" + "coupled_streams".
+
+   *  "num_streams" + "coupled_streams" is less than 255 and the channel
+      count is at most 255.
+
+   In addition, because each transmitted coded channel must be produced
+   from exactly one input channel, a configuration used by an encoder
+   (i.e. describing media to be sent) MUST map every coded channel in
+   the range 0 to ("num_streams" + "coupled_streams" - 1) from exactly
+   one input channel; no two input channels may map to the same coded
+   channel, and no coded channel in that range may be left unmapped.  (A
+   pure decoder configuration permits the 255 silence value but is
+   otherwise bound by the same range constraints.)
+
+5.1.  Recommended Channel Ordering
+
+   The decoded channels identified by the mapping SHOULD be presented in
+   the Vorbis channel order [VORBIS], which is also the order assumed by
+   the Opus multistream reference implementation and by the predefined
+   channel mappings in Section 5.1.1.2 of [RFC7845].  For the common
+   layouts this is:
+
+   *  1 channel: mono.
+
+   *  2 channels: stereo (left, right).
+
+   *  6 channels (5.1): front left, front center, front right, rear
+      left, rear right, LFE.
+
+   *  8 channels (7.1): front left, front center, front right, side
+      left, side right, rear left, rear right, LFE.
+
+   A receiver that requires a different output channel order applies its
+   own permutation locally; it does not alter the negotiated
+   "channel_mapping".
+
+6.  Offer/Answer Considerations
+
+   The procedures of [RFC7587] Section 7 apply, with the following
+   clarifications for "audio/multiopus":
+
+   *  The channel count in "a=rtpmap" and the "num_streams",
+      "coupled_streams", and "channel_mapping" parameters are
+      declarative.  An offerer lists, as separate payload types, each
+      multi-channel configuration it is willing to receive.
+
+   *  An answerer that supports a given offered configuration accepts it
+      unchanged.  An answerer that does not support it (for example,
+      because it cannot decode the requested number of channels) MUST
+      NOT modify these parameters; instead it omits that payload type
+      from the answer.
+
+   *  The "audio/multiopus" and "audio/opus" formats are independent.
+      An endpoint that supports both surround and stereo Opus offers
+      both as distinct payload types so that a peer can select whichever
+      it supports.
+
+7.  Security Considerations
+
+   The security considerations of [RFC7587] and [RFC6716] apply
+   unchanged.  The additional parameters defined here describe a channel
+   layout and do not alter the threat model: as with any codec
+   configuration parameter, an implementation MUST validate that the
+   "num_streams", "coupled_streams", and "channel_mapping" values
+   satisfy the constraints in Section 5 before configuring the decoder,
+   since a malformed channel mapping table could otherwise drive an
+   implementation to allocate or index channels out of range.
+
+8.  Congestion Control Considerations
+
+   The congestion control considerations of [RFC7587] Section 5 apply.
+   Note that the bitrate of a multi-channel Opus stream scales with the
+   number of coded streams; the "maxaveragebitrate" parameter applies to
+   the aggregate stream.
+
+9.  IANA Considerations
+
+9.1.  Media Type Registration
+
+   This document requests that IANA register the "audio/multiopus" media
+   type in the "Media Types" registry, following the template of
+   [RFC8866] and reusing, where applicable, the registration for "audio/
+   opus" in Section 7 of [RFC7587].
+
+   Type name:  audio
+
+   Subtype name:  multiopus
+
+   Required parameters:  num_streams, coupled_streams, channel_mapping
+      (see this document, Section 4).
+
+   Optional parameters:  maxplaybackrate, sprop-maxcapturerate,
+      maxptime, ptime, maxaveragebitrate, useinbandfec, usedtx, cbr (all
+      as defined in Section 7.1 of [RFC7587]).  The "stereo" and "sprop-
+      stereo" parameters of [RFC7587] are not used with this subtype.
+
+   Encoding considerations:  This media type is framed binary data; see
+      Section 4.8 of [RFC8866].
+
+   Security considerations:  See the Security Considerations section of
+      this document and of [RFC7587].
+
+   Interoperability considerations:  See [RFC7587].  An RFC 7587-only
+      implementation will not match this subtype and will ignore it
+      during negotiation.
+
+   Published specification:  This document and [RFC6716], [RFC7587],
+      [RFC7845].
+
+   Applications that use this media type:  Multi-channel (surround)
+      audio over RTP, including real-time communications and
+      conferencing applications.
+
+   Other relevant references, contact, author/change controller,
+
+   provisional registration status, etc.:  As for "audio/opus" in
+      [RFC7587]; the change controller is the IETF.
+
+9.2.  SDP Parameters
+
+   This document defines the following format parameters for use with
+   the "audio/multiopus" media subtype, to be recorded with the media
+   type registration above: "num_streams", "coupled_streams", and
+   "channel_mapping".  Their syntax and semantics are specified in
+   Section 4 and Section 5.
+
+10.  References
+
+10.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/rfc/rfc2119>.
+
+   [RFC6716]  Valin, JM., Vos, K., and T. Terriberry, "Definition of the
+              Opus Audio Codec", RFC 6716, DOI 10.17487/RFC6716,
+              September 2012, <https://www.rfc-editor.org/rfc/rfc6716>.
+
+   [RFC7587]  Spittka, J., Vos, K., and JM. Valin, "RTP Payload Format
+              for the Opus Speech and Audio Codec", RFC 7587,
+              DOI 10.17487/RFC7587, June 2015,
+              <https://www.rfc-editor.org/rfc/rfc7587>.
+
+   [RFC7845]  Terriberry, T., Lee, R., and R. Giles, "Ogg Encapsulation
+              for the Opus Audio Codec", RFC 7845, DOI 10.17487/RFC7845,
+              April 2016, <https://www.rfc-editor.org/rfc/rfc7845>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/rfc/rfc8174>.
+
+   [RFC8866]  Begen, A., Kyzivat, P., Perkins, C., and M. Handley, "SDP:
+              Session Description Protocol", RFC 8866,
+              DOI 10.17487/RFC8866, January 2021,
+              <https://www.rfc-editor.org/rfc/rfc8866>.
+
+10.2.  Informative References
+
+   [VORBIS]   Xiph.Org Foundation, "Vorbis I specification,
+              Section 4.3.9 (Output channel order)", n.d.,
+              <https://www.xiph.org/vorbis/doc/Vorbis_I_spec.html>.
+
+Acknowledgments
+
+   The "audio/multiopus" SDP syntax formalized here was introduced in
+   the WebRTC project in 2019 (tracked as bug webrtc:8649), reusing the
+   terminology of the Ogg Opus channel mapping [RFC7845].  The
+   multistream Opus mechanism itself originates with the Opus codec
+   [RFC6716].
+
+Author's Address
+
+   Claude
